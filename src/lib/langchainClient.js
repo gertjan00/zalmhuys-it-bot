@@ -5,7 +5,6 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { HarmBlockThreshold, HarmCategory } = require("@google/generative-ai");
 const { AIMessage, HumanMessage, ToolMessage, SystemMessage } = require("@langchain/core/messages");
 const { StateGraph, END, START } = require("@langchain/langgraph");
-
 const { getChatMessages } = require("./supabaseClient");
 const { tools, toolsDescription, toolNames } = require("./tools");
 
@@ -83,7 +82,7 @@ async function callAgentLogic(state) {
   };
 }
 
-// --- CUSTOM TOOL EXECUTOR NODE --- standaard tool van lanchain gaf probleme
+// --- CUSTOM TOOL EXECUTOR NODE --- standaard tool van lanchain geeft problemen met executeNode
 async function customToolExecutorNodeLogic(state) {
   console.log("[LangGraph] customToolExecutorNodeLogic: Start");
   const lastMessage = state.chat_history[state.chat_history.length - 1];
@@ -191,29 +190,13 @@ async function getLangchainResponse(chatId, userInput) {
 
   try {
     const dbMessages = await getChatMessages(chatId, CHAT_HISTORY_MESSAGE_LIMIT);
+    // Reconstructie wordt simpeler, geen metadata checks voor tool_calls etc.
     const initialChatHistory = dbMessages
       .map((msg) => {
+        if (!msg) return null;
         if (msg.sender_role === "user") return new HumanMessage({ content: msg.content });
         if (msg.sender_role === "assistant" || msg.sender_role === "model") {
-          let aiMsgContent = msg.content;
-          let toolCalls;
-          if (msg.metadata && msg.metadata.tool_calls) toolCalls = msg.metadata.tool_calls;
-          return toolCalls
-            ? new AIMessage({ content: aiMsgContent || "", tool_calls: toolCalls })
-            : new AIMessage({ content: aiMsgContent });
-        }
-        if (msg.sender_role === "tool") {
-          if (msg.metadata && msg.metadata.tool_call_id) {
-            return new ToolMessage({
-              content: msg.content,
-              tool_call_id: msg.metadata.tool_call_id,
-              name: msg.metadata.name,
-            });
-          }
-          return new ToolMessage({
-            content: msg.content,
-            tool_call_id: `tool_call_id_placeholder_${Date.now()}`,
-          });
+          return new AIMessage({ content: msg.content }); // Geen tool_calls herstel
         }
         return null;
       })
@@ -225,7 +208,6 @@ async function getLangchainResponse(chatId, userInput) {
     ).replace("{tool_names}", toolNames);
     let runTimeChatHistory = [];
     const hasSystemMessage = initialChatHistory.some((m) => m instanceof SystemMessage);
-
     if (!hasSystemMessage) {
       runTimeChatHistory.push(new SystemMessage(systemInstructionText));
       runTimeChatHistory.push(...initialChatHistory.slice(-(CHAT_HISTORY_MESSAGE_LIMIT - 1)));
@@ -234,29 +216,51 @@ async function getLangchainResponse(chatId, userInput) {
     }
 
     const finalState = await compiledGraphApp.invoke(
-      { input: userInput, chat_history: runTimeChatHistory },
-      { recursionLimit: 10 }
+      { input: userInput, chat_history: [...runTimeChatHistory] },
+      { recursionLimit: 10, configurable: { thread_id: String(chatId) } }
     );
 
     const lastAiMessage = finalState.chat_history.filter((m) => m instanceof AIMessage).pop();
 
-    if (lastAiMessage && lastAiMessage.content) {
-      if (lastAiMessage.tool_calls && lastAiMessage.tool_calls.length > 0) {
+    if (
+      lastAiMessage &&
+      (typeof lastAiMessage.content === "string" ||
+        (Array.isArray(lastAiMessage.content) &&
+          lastAiMessage.content.some((c) => c.type === "text")))
+    ) {
+      if (
+        lastAiMessage.tool_calls &&
+        lastAiMessage.tool_calls.length > 0 &&
+        typeof lastAiMessage.content === "string" &&
+        lastAiMessage.content.trim() === ""
+      ) {
         console.warn(
-          `[LangGraph - Chat ${chatId}] Graaf eindigde, maar laatste AIMessage heeft nog tool_calls.`
+          `[LangGraph - Chat ${chatId}] Graaf eindigde met een AIMessage die alleen tool_calls heeft en geen tekstuele content.`
         );
-        return "Er is een onverwachte situatie opgetreden. Probeer het opnieuw.";
+        return "Ik ben bezig met het verwerken van je verzoek met een tool, een ogenblikje...";
       }
-      const botResponse = String(lastAiMessage.content);
+
+      let botResponseText = "";
+      if (typeof lastAiMessage.content === "string") {
+        botResponseText = lastAiMessage.content;
+      } else if (Array.isArray(lastAiMessage.content)) {
+        botResponseText = lastAiMessage.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("\n");
+      }
+
       console.log(
-        `[LangGraph - Chat ${chatId}] Succesvol antwoord: "${botResponse.substring(0, 50)}${
-          botResponse.length > 50 ? "..." : ""
+        `[LangGraph - Chat ${chatId}] Succesvol antwoord: "${botResponseText.substring(0, 50)}${
+          botResponseText.length > 50 ? "..." : ""
         }"`
       );
-      return botResponse;
+      return botResponseText;
     } else {
-      console.error(`[LangGraph - Chat ${chatId}] Geen geldig antwoord gevonden in finale state.`);
-      return "Sorry, ik kon geen antwoord genereren op dit moment (geen content).";
+      console.error(
+        `[LangGraph - Chat ${chatId}] Geen geldig antwoord (tekstuele content) gevonden in finale AIMessage.`
+      );
+      return "Sorry, ik kon geen bruikbaar antwoord genereren op dit moment.";
     }
   } catch (error) {
     console.error(
@@ -275,13 +279,8 @@ async function getLangchainResponse(chatId, userInput) {
   }
 }
 
-function clearChatCache(chatId) {
-  console.log();
-}
-
 console.log(` - Langchain client (LangGraph) geïnitialiseerd met model: ${GEMINI_MODEL_NAME}.`);
 
 module.exports = {
   getLangchainResponse,
-  clearChatCache,
 };

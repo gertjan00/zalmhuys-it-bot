@@ -2,13 +2,14 @@
 const telegram = require("../lib/telegramClient");
 const { saveChatMessage } = require("../lib/supabaseClient");
 const { getLangchainResponse } = require("../lib/langchainClient");
+const { BOT_ID } = require("../config");
 
 async function handle(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const userMessageId = msg.message_id;
   const userName = msg.from.first_name || msg.from.username;
-  const userText = msg.text; // We weten al dat dit tekst is
+  const userText = msg.text;
 
   console.log(
     `[TextMessageHandler - Chat ${chatId}] Van ${userName}: "${userText.substring(0, 50)}${
@@ -17,16 +18,14 @@ async function handle(msg) {
   );
 
   try {
-    await saveChatMessage(chatId, userId, userMessageId, "user", userText, { userName });
+    await saveChatMessage(chatId, userId, userMessageId, "user", userText);
   } catch (e) {
     console.error(`[TextMessageHandler - Chat ${chatId}] Kon gebruikersbericht niet opslaan.`);
   }
 
   try {
     await telegram.sendChatAction(chatId, "typing");
-  } catch (e) {
-    /* ignore */
-  }
+  } catch (e) {}
 
   let botReplyText;
   try {
@@ -56,9 +55,7 @@ async function handle(msg) {
     const botMessageId = sentBotMessage.message_id;
     const botUserIdPlaceholder = 0;
     try {
-      await saveChatMessage(chatId, botUserIdPlaceholder, botMessageId, "assistant", botReplyText, {
-        botName: "ZalmhuysITBot",
-      });
+      await saveChatMessage(chatId, BOT_ID, botMessageId, "assistant", botReplyText);
     } catch (e) {
       console.error(`[TextMessageHandler - Chat ${chatId}] Kon botbericht niet opslaan.`);
     }

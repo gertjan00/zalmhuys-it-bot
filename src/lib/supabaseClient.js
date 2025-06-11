@@ -15,7 +15,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 console.log(" - Supabase client geïnitialiseerd.");
 
-async function saveChatMessage(chatId, userId, messageId, senderRole, content, metadata = null) {
+async function saveChatMessage(chatId, userId, messageId, senderRole, content) {
   const functionName = "save-chat-message";
   try {
     const { data, error } = await supabase
@@ -27,7 +27,6 @@ async function saveChatMessage(chatId, userId, messageId, senderRole, content, m
           message_id: messageId,
           sender_role: senderRole,
           content: content,
-          metadata: metadata || null,
         },
       ])
       .select("id")
@@ -60,7 +59,7 @@ async function getChatMessages(chatId, limit = 10) {
       .from("chat_history")
       .select("sender_role, content")
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: false }) // Nieuwste eerst
+      .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -69,7 +68,6 @@ async function getChatMessages(chatId, limit = 10) {
       );
       return [];
     }
-    // Keer de volgorde om zodat ze chronologisch zijn (oudste eerst) voor Langchain
     return data ? data.reverse() : [];
   } catch (e) {
     console.error(
