@@ -8,7 +8,163 @@ if (!notionApiKey) {
 }
 
 const notion = new Client({ auth: notionApiKey });
-
 console.log(" - Notion client geïnitialiseerd.");
 
-module.exports = notion;
+async function getDatabaseSchema(databaseId) {
+  try {
+    const response = await notion.databases.retrieve({ database_id: databaseId });
+    return response.properties;
+  } catch (error) {
+    console.error(`[NotionClient] Fout bij ophalen DB schema ${databaseId}: ${error.message}`);
+    return `Kon schema niet ophalen voor database ${databaseId}: ${error.message}`;
+  }
+}
+
+async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) {
+  try {
+    const notionApiProperties = {};
+    for (const propNameKey in pagePropertiesFromLlm) {
+      const propValue = pagePropertiesFromLlm[propNameKey];
+      const propDefinition = rawDbSchema[propNameKey];
+
+      if (!propDefinition) {
+        console.warn(`[NotionClient] Property '${propNameKey}' niet in schema. Overgeslagen.`);
+        continue;
+      }
+
+      const readOnlyTypes = [
+        "formula",
+        "rollup",
+        "created_time",
+        "created_by",
+        "last_edited_time",
+        "last_edited_by",
+        "unique_id",
+        "files",
+      ];
+      if (readOnlyTypes.includes(propDefinition.type)) {
+        continue;
+      }
+
+      switch (propDefinition.type) {
+        case "title":
+          notionApiProperties[propNameKey] = { title: [{ text: { content: String(propValue) } }] };
+          break;
+        case "rich_text":
+          notionApiProperties[propNameKey] = {
+            rich_text: [{ text: { content: String(propValue) } }],
+          };
+          break;
+        case "select":
+          if (propDefinition.select.options.some((opt) => opt.name === String(propValue))) {
+            notionApiProperties[propNameKey] = { select: { name: String(propValue) } };
+          } else {
+            console.warn(
+              `[NotionClient] Ongeldige optie '${propValue}' voor select '${propNameKey}'.`
+            );
+          }
+          break;
+        case "status":
+          if (propDefinition.status.options.some((opt) => opt.name === String(propValue))) {
+            notionApiProperties[propNameKey] = { status: { name: String(propValue) } };
+          } else {
+            console.warn(
+              `[NotionClient] Ongeldige optie '${propValue}' voor status '${propNameKey}'.`
+            );
+          }
+          break;
+        case "multi_select":
+          if (Array.isArray(propValue)) {
+            const validOptions = propValue
+              .map((val) => String(val))
+              .filter((valStr) =>
+                propDefinition.multi_select.options.some((opt) => opt.name === valStr)
+              );
+            if (validOptions.length > 0) {
+              notionApiProperties[propNameKey] = {
+                multi_select: validOptions.map((optName) => ({ name: optName })),
+              };
+            }
+          } else {
+            console.warn(
+              `[NotionClient] Waarde voor multi_select '${propNameKey}' moet array zijn.`
+            );
+          }
+          break;
+        case "number":
+          const num = parseFloat(propValue);
+          if (!isNaN(num)) {
+            notionApiProperties[propNameKey] = { number: num };
+          } else {
+            console.warn(
+              `[NotionClient] Ongeldige waarde '${propValue}' voor number '${propNameKey}'.`
+            );
+          }
+          break;
+        case "checkbox":
+          notionApiProperties[propNameKey] = { checkbox: Boolean(propValue) };
+          break;
+        case "date":
+          if (typeof propValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(propValue)) {
+            notionApiProperties[propNameKey] = { date: { start: propValue } };
+          } else if (typeof propValue === "object" && propValue.start) {
+            notionApiProperties[propNameKey] = { date: propValue };
+          } else {
+            console.warn(
+              `[NotionClient] Ongeldig formaat '${propValue}' voor date '${propNameKey}'.`
+            );
+          }
+          break;
+        case "url":
+          notionApiProperties[propNameKey] = { url: String(propValue) };
+          break;
+        case "email":
+          notionApiProperties[propNameKey] = { email: String(propValue) };
+          break;
+        case "phone_number":
+          notionApiProperties[propNameKey] = { phone_number: String(propValue) };
+          break;
+        default:
+          // Voor onbekende types, geen actie, geen error, gewoon negeren.
+          break;
+      }
+    }
+
+    const titlePropName = Object.keys(rawDbSchema).find((key) => rawDbSchema[key].type === "title");
+    if (!titlePropName || !notionApiProperties[titlePropName]) {
+      return `Fout: Titel property ('${
+        titlePropName || "Onbekend"
+      }') is verplicht en ontbreekt of kon niet worden geformatteerd.`;
+    }
+
+    if (Object.keys(notionApiProperties).length === 0) {
+      return "Fout: Geen geldige properties gevonden om in te stellen voor het ticket.";
+    }
+
+    const response = await notion.pages.create({
+      parent: { database_id: databaseId },
+      properties: notionApiProperties,
+    });
+    return response;
+  } catch (error) {
+    console.error(
+      `[NotionClient] Fout bij aanmaken Notion pagina: ${error.message}`,
+      error.body ? JSON.parse(error.body) : ""
+    );
+    let notionErrorMsg = error.message;
+    if (error.body) {
+      try {
+        const pBody = JSON.parse(error.body);
+        if (pBody && pBody.message) notionErrorMsg = pBody.message;
+      } catch (e) {
+        /*ignore*/
+      }
+    }
+    return `Kon ticket niet aanmaken: ${notionErrorMsg}`;
+  }
+}
+
+module.exports = {
+  getDatabaseSchema,
+  createNotionPage,
+};

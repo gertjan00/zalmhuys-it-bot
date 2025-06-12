@@ -9,6 +9,7 @@ console.log("=======================\nZalmhuys IT Bot wordt gestart...");
 const telegram = require("./lib/telegramClient");
 require("./lib/supabaseClient");
 require("./lib/langchainClient");
+require("./lib/notionClient.js");
 
 const textMessageHandler = require("./handlers/textMessageHandler");
 const commandHandler = require("./handlers/commandHandler");
