@@ -132,24 +132,31 @@ async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) 
 
     const titlePropName = Object.keys(rawDbSchema).find((key) => rawDbSchema[key].type === "title");
     if (!titlePropName || !notionApiProperties[titlePropName]) {
-      return `Fout: Titel property ('${
+      const errorMsg = `Fout: Titel property ('${
         titlePropName || "Onbekend"
-      }') is verplicht en ontbreekt of kon niet worden geformatteerd.`;
+      }') is verplicht en ontbreekt of kon niet worden geformatteerd. Beschikbare properties in notionApiProperties: ${Object.keys(
+        notionApiProperties
+      ).join(", ")}`;
+      console.error("[NotionClient.createNotionPage]", errorMsg);
+      return errorMsg;
     }
-
     if (Object.keys(notionApiProperties).length === 0) {
-      return "Fout: Geen geldige properties gevonden om in te stellen voor het ticket.";
+      const errorMsg = "Fout: Geen geldige properties gevonden om in te stellen voor het ticket.";
+      console.error("[NotionClient.createNotionPage]", errorMsg);
+      return errorMsg;
     }
 
     const response = await notion.pages.create({
       parent: { database_id: databaseId },
       properties: notionApiProperties,
     });
-    return response;
+
+    return response; // Retourneer het volledige response object bij succes
   } catch (error) {
     console.error(
-      `[NotionClient] Fout bij aanmaken Notion pagina: ${error.message}`,
-      error.body ? JSON.parse(error.body) : ""
+      `[NotionClient.createNotionPage] Fout bij aanmaken Notion pagina: ${error.message}`,
+      error.body ? JSON.parse(error.body) : "",
+      error.stack // Log de stacktrace van de Notion client error
     );
     let notionErrorMsg = error.message;
     if (error.body) {
@@ -157,10 +164,10 @@ async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) 
         const pBody = JSON.parse(error.body);
         if (pBody && pBody.message) notionErrorMsg = pBody.message;
       } catch (e) {
-        /*ignore*/
+        /*ignore json parse error of body*/
       }
     }
-    return `Kon ticket niet aanmaken: ${notionErrorMsg}`;
+    return `NOTION_API_ERROR: ${notionErrorMsg}`; // Duidelijke prefix
   }
 }
 
