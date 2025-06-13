@@ -20,9 +20,15 @@ async function getDatabaseSchema(databaseId) {
   }
 }
 
-async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) {
+async function createNotionPage(
+  databaseId,
+  pagePropertiesFromLlm,
+  rawDbSchema,
+  pageContentText = ""
+) {
   try {
     const notionApiProperties = {};
+
     for (const propNameKey in pagePropertiesFromLlm) {
       const propValue = pagePropertiesFromLlm[propNameKey];
       const propDefinition = rawDbSchema[propNameKey];
@@ -130,6 +136,34 @@ async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) 
       }
     }
 
+    const pageContentBlocks = [];
+
+    const textForPageBlocks = pageContentText; // Gebruik de parameter die nu de juiste data zou moeten bevatten
+
+    if (
+      textForPageBlocks &&
+      typeof textForPageBlocks === "string" &&
+      textForPageBlocks.trim() !== ""
+    ) {
+      const paragraphs = textForPageBlocks.split("\\n").filter((p) => p.trim() !== ""); // Gebruik textForPageBlocks
+      paragraphs.forEach((paragraphText) => {
+        pageContentBlocks.push({
+          object: "block",
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: paragraphText,
+                },
+              },
+            ],
+          },
+        });
+      });
+    }
+
     const titlePropName = Object.keys(rawDbSchema).find((key) => rawDbSchema[key].type === "title");
     if (!titlePropName || !notionApiProperties[titlePropName]) {
       const errorMsg = `Fout: Titel property ('${
@@ -149,6 +183,7 @@ async function createNotionPage(databaseId, pagePropertiesFromLlm, rawDbSchema) 
     const response = await notion.pages.create({
       parent: { database_id: databaseId },
       properties: notionApiProperties,
+      children: pageContentBlocks,
     });
 
     return response; // Retourneer het volledige response object bij succes

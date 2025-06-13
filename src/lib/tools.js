@@ -52,16 +52,17 @@ const createTicketInNotionTool = new DynamicTool({
     }
 
     // De rest van de logica blijft grotendeels hetzelfde, werkend met parsedInputObject
-    const { announce_status, ...ticketProperties } = parsedInputObject || {};
+    const { announce_status, page_content_details, ...ticketPropertiesForNotion } =
+      parsedInputObject || {}; // Splits page_content_details af
 
     if (
-      typeof ticketProperties !== "object" ||
-      ticketProperties === null ||
-      Object.keys(ticketProperties).length === 0
+      typeof ticketPropertiesForNotion !== "object" ||
+      ticketPropertiesForNotion === null ||
+      Object.keys(ticketPropertiesForNotion).length === 0
     ) {
       return "FOUT_TOOL_INPUT_DATA: Geen of ongeldige ticket properties na parsen en extractie.";
     }
-    if (!ticketProperties.Onderwerp) {
+    if (!ticketPropertiesForNotion.Onderwerp) {
       console.error(
         "[Tool:create_ticket_in_notion] 'Onderwerp' ontbreekt in ticketProperties:",
         JSON.stringify(ticketProperties)
@@ -78,8 +79,9 @@ const createTicketInNotionTool = new DynamicTool({
 
       const result = await notionClient.createNotionPage(
         NOTION_DATABASE_ID,
-        ticketProperties,
-        rawDbSchema
+        ticketPropertiesForNotion, // Dit zijn alleen de ECHTE Notion properties
+        rawDbSchema,
+        page_content_details // Geef de page content apart mee
       );
 
       if (typeof result === "string") return `NOTION_CREATE_ERROR: ${result}`;
