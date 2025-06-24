@@ -30,39 +30,26 @@ telegram.on("message", async (msg) => {
       console.log(`[ServerRouter - Chat ${chatId}] Onbekend commando: ${msg.text}`);
       try {
         await telegram.sendMessage(chatId, `Onbekend commando: ${msg.text}`);
-      } catch (e) {
-        /* ignore */
-      }
+      } catch (e) {}
     }
-    return; // Stop verdere verwerking als het een commando was
+    return;
   }
 
-  // Andere berichttypes
   if (msg.text) {
     await textMessageHandler.handle(msg);
   } else if (msg.photo) {
     await imageHandler.handle(msg);
   } else if (msg.audio) {
     await audioHandler.handle(msg);
-  }
-  // Voeg hier handlers toe voor msg.video, msg.document, etc.
-  // else if (msg.video) {
-  //   await videoHandler.handle(msg);
-  // }
-  else {
+  } else {
     await unknownMessageHandler.handle(msg);
   }
 });
 
-// Handler voor callback queries
 telegram.on("callback_query", async (callbackQuery) => {
   await callbackQueryHandler.handle(callbackQuery);
 });
 
-// Verwijder de oude telegram.onText(/\/start/, ...) want die is nu in de router
-// Verwijder de oude telegram.on("message", handleIncomingMessage)
-
-// Optioneel: error handling voor de bot zelf
 telegram.on("polling_error", (error) => {
   console.error("[Telegram Polling Error]", error.code, error.message);
 });

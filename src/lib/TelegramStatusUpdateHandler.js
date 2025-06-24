@@ -28,8 +28,6 @@ class TelegramStatusUpdateHandler extends BaseCallbackHandler {
       return;
     }
 
-    // 'tool' is het tool object, 'name' is de naam van de aangeroepen tool zoals gespecificeerd in de tool_call
-    // 'metadata.name' kan ook de toolnaam bevatten, afhankelijk van hoe LangGraph het doorgeeft.
     const toolNameForLogic = name || (tool && tool.name) || (metadata && metadata.name);
 
     if (toolNameForLogic) {
@@ -40,10 +38,8 @@ class TelegramStatusUpdateHandler extends BaseCallbackHandler {
       } else if (toolNameForLogic === "get_notion_database_schema") {
         statusMessage = "Ik haal even de ticketstructuur op om een ticket te kunnen maken...";
       }
-      // Voeg hier meer specifieke berichten toe voor andere tools indien nodig
 
       try {
-        // Stuur eerst een "typing" actie voor een betere UX
         await telegram.sendChatAction(this.chatId, "typing");
         await telegram.sendMessage(this.chatId, statusMessage);
         console.log(
@@ -69,7 +65,7 @@ class TelegramStatusUpdateHandler extends BaseCallbackHandler {
 
   async handleToolError(error, runId, parentRunId, tags, name) {
     if (!this.chatId) return;
-    const toolNameForLogic = name; // 'name' bevat hier de naam van de tool die de error gaf
+    const toolNameForLogic = name;
 
     if (toolNameForLogic) {
       const userFriendlyError = `Oeps, er ging iets mis tijdens het uitvoeren van '${toolNameForLogic.replace(
@@ -89,21 +85,6 @@ class TelegramStatusUpdateHandler extends BaseCallbackHandler {
       }
     }
   }
-
-  // Je kunt hier meer handlers toevoegen als dat nodig is (bv. on_llm_start, on_chain_start),
-  // maar wees voorzichtig om de gebruiker niet te spammen.
-  // Voorbeeld:
-  // async handleLLMStart(llm, prompts, runId, parentRunId, extraParams, tags, metadata) {
-  //   if (!this.chatId) return;
-  //   // Stuur alleen als het een "dure" LLM call is, of de eerste in een keten.
-  //   // const llmName = metadata?.name || llm?.name || 'een AI model';
-  //   // if (llmName === "ChatGoogleGenerativeAI") { // Check op de specifieke LLM
-  //   //   try {
-  //   //     await telegram.sendChatAction(this.chatId, "typing");
-  //   //     // await telegram.sendMessage(this.chatId, `Ik ben je vraag aan het verwerken met ${llmName}...`);
-  //   //   } catch (e) { /* ignore */ }
-  //   // }
-  // }
 }
 
 module.exports = { TelegramStatusUpdateHandler };

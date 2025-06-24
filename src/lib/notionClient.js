@@ -131,21 +131,20 @@ async function createNotionPage(
           notionApiProperties[propNameKey] = { phone_number: String(propValue) };
           break;
         default:
-          // Voor onbekende types, geen actie, geen error, gewoon negeren.
           break;
       }
     }
 
     const pageContentBlocks = [];
 
-    const textForPageBlocks = pageContentText; // Gebruik de parameter die nu de juiste data zou moeten bevatten
+    const textForPageBlocks = pageContentText;
 
     if (
       textForPageBlocks &&
       typeof textForPageBlocks === "string" &&
       textForPageBlocks.trim() !== ""
     ) {
-      const paragraphs = textForPageBlocks.split("\\n").filter((p) => p.trim() !== ""); // Gebruik textForPageBlocks
+      const paragraphs = textForPageBlocks.split("\\n").filter((p) => p.trim() !== "");
       paragraphs.forEach((paragraphText) => {
         pageContentBlocks.push({
           object: "block",
@@ -186,23 +185,21 @@ async function createNotionPage(
       children: pageContentBlocks,
     });
 
-    return response; // Retourneer het volledige response object bij succes
+    return response;
   } catch (error) {
     console.error(
       `[NotionClient.createNotionPage] Fout bij aanmaken Notion pagina: ${error.message}`,
       error.body ? JSON.parse(error.body) : "",
-      error.stack // Log de stacktrace van de Notion client error
+      error.stack
     );
     let notionErrorMsg = error.message;
     if (error.body) {
       try {
         const pBody = JSON.parse(error.body);
         if (pBody && pBody.message) notionErrorMsg = pBody.message;
-      } catch (e) {
-        /*ignore json parse error of body*/
-      }
+      } catch (e) {}
     }
-    return `NOTION_API_ERROR: ${notionErrorMsg}`; // Duidelijke prefix
+    return `NOTION_API_ERROR: ${notionErrorMsg}`;
   }
 }
 

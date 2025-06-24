@@ -4,7 +4,6 @@ const notionClient = require("./notionClient");
 const { NOTION_DATABASE_ID } = require("../config");
 const { z } = require("zod");
 
-// getNotionDatabaseSchemaTool (blijft ongewijzigd, werkt correct)
 const getNotionDatabaseSchemaTool = new DynamicTool({
   name: "get_notion_database_schema",
   description:
@@ -25,18 +24,15 @@ const createTicketInNotionTool = new DynamicTool({
   name: "create_ticket_in_notion",
   description: `Maakt een nieuw IT-ticket aan. Verwacht een 'input' argument dat een JSON string is van een plat object met ticket properties (bv. "Onderwerp", "Omschrijving") en optioneel 'announce_status: true'. Statusbericht wordt extern afgehandeld.`,
   argsSchema: z.object({
-    // Dit schema dicteert dat invoke() een object {input: "string"} verwacht
     input: z
       .string()
       .describe(
         "Een JSON string die een plat object bevat met ticket properties en optioneel announce_status."
       ),
   }),
-  // MAAR de func ontvangt dan direct de WAARDE van 'input'
   func: async (jsonInputString) => {
     let parsedInputObject;
     try {
-      // De check verandert: jsonInputString moet nu zelf de string zijn.
       if (typeof jsonInputString !== "string" || jsonInputString.trim() === "") {
         console.error(
           "[Tool:create_ticket_in_notion] Ontvangen jsonInputString is geen string of is leeg."
@@ -51,9 +47,8 @@ const createTicketInNotionTool = new DynamicTool({
       return `FOUT_TOOL_INPUT_PARSING: Kon JSON input string niet parsen. Detail: ${e.message}`;
     }
 
-    // De rest van de logica blijft grotendeels hetzelfde, werkend met parsedInputObject
     const { announce_status, page_content_details, ...ticketPropertiesForNotion } =
-      parsedInputObject || {}; // Splits page_content_details af
+      parsedInputObject || {};
 
     if (
       typeof ticketPropertiesForNotion !== "object" ||
@@ -79,9 +74,9 @@ const createTicketInNotionTool = new DynamicTool({
 
       const result = await notionClient.createNotionPage(
         NOTION_DATABASE_ID,
-        ticketPropertiesForNotion, // Dit zijn alleen de ECHTE Notion properties
+        ticketPropertiesForNotion,
         rawDbSchema,
-        page_content_details // Geef de page content apart mee
+        page_content_details
       );
 
       if (typeof result === "string") return `NOTION_CREATE_ERROR: ${result}`;

@@ -156,9 +156,6 @@ async function callAgentLogic(state) {
   };
 }
 
-// src/lib/langchainClient.js
-// Functie: customToolExecutorNodeLogic
-
 async function customToolExecutorNodeLogic(state, config) {
   const lastAiMessage = state.chat_history[state.chat_history.length - 1];
   const newToolMessages = [];
@@ -189,7 +186,6 @@ async function customToolExecutorNodeLogic(state, config) {
           if (chatIdForTools) {
             await telegram.sendChatAction(chatIdForTools, "typing");
             await telegram.sendMessage(chatIdForTools, "Ik haal even de ticketstructuur op...");
-            // VERWIJDERD: console.log(`[ToolExecutor - Chat ${chatIdForTools}] Statusbericht voor ${toolToExecute.name} verzonden.`);
           }
         } else if (toolToExecute.name === "create_ticket_in_notion") {
           processedArgsForToolInvoke = rawLlmArgs;
@@ -202,18 +198,14 @@ async function customToolExecutorNodeLogic(state, config) {
                   chatIdForTools,
                   "Moment, ik ben het ticket nu aan het aanmaken in Notion..."
                 );
-                // VERWIJDERD: console.log(`[ToolExecutor - Chat ${chatIdForTools}] Statusbericht voor ${toolToExecute.name} verzonden (announce_status).`);
               }
-            } catch (e) {
-              /* ignore parse error for status */
-            }
+            } catch (e) {}
           }
         } else {
           processedArgsForToolInvoke = rawLlmArgs;
         }
 
         if (observation === undefined) {
-          // VERWIJDERD: console.log(`[LangGraph] Uitvoeren tool '${toolCall.name}'...`);
           observation = await toolToExecute.invoke(processedArgsForToolInvoke);
         }
         newToolMessages.push(
@@ -224,7 +216,7 @@ async function customToolExecutorNodeLogic(state, config) {
           })
         );
       } catch (error) {
-        console.error(`[LangGraph] FOUT bij tool ${toolCall.name}: ${error.message}`); // FOUTEN BLIJVEN!
+        console.error(`[LangGraph] FOUT bij tool ${toolCall.name}: ${error.message}`);
         observation = `FOUT_IN_TOOL: ${error.message}`;
         newToolMessages.push(
           new ToolMessage({
@@ -235,7 +227,7 @@ async function customToolExecutorNodeLogic(state, config) {
         );
       }
     } else {
-      console.warn(`[LangGraph] Tool niet gevonden: ${toolCall.name}`); // WAARSCHUWINGEN BLIJVEN!
+      console.warn(`[LangGraph] Tool niet gevonden: ${toolCall.name}`);
       newToolMessages.push(
         new ToolMessage({
           content: `Tool ${toolCall.name} niet gevonden.`,
@@ -279,9 +271,9 @@ async function getLangchainResponse(chatId, userInput) {
     `[LangGraph - Chat ${chatId}] Input: "${userInput.substring(0, 30)}${
       userInput.length > 30 ? "..." : ""
     }"`
-  ); // Korte input log
+  );
 
-  const statusUpdateHandler = new TelegramStatusUpdateHandler(chatId); // NIEUW: Instantieer handler
+  const statusUpdateHandler = new TelegramStatusUpdateHandler(chatId);
 
   try {
     const dbMessages = await getChatMessages(chatId, CHAT_HISTORY_MESSAGE_LIMIT);
@@ -306,7 +298,6 @@ async function getLangchainResponse(chatId, userInput) {
       runTimeChatHistory.push(new SystemMessage(systemInstructionText));
       runTimeChatHistory.push(...initialChatHistory.slice(-(CHAT_HISTORY_MESSAGE_LIMIT - 1)));
     } else {
-      // Als er al een SystemMessage is (bv. door vorige debug), vervang deze met de laatste versie.
       const nonSystemMessages = initialChatHistory.filter((m) => !(m instanceof SystemMessage));
       runTimeChatHistory.push(new SystemMessage(systemInstructionText));
       runTimeChatHistory.push(...nonSystemMessages.slice(-(CHAT_HISTORY_MESSAGE_LIMIT - 1)));
@@ -318,7 +309,7 @@ async function getLangchainResponse(chatId, userInput) {
         recursionLimit: 15,
         configurable: {
           thread_id: String(chatId),
-          callbacks: [statusUpdateHandler], // VOEG TOE
+          callbacks: [statusUpdateHandler],
         },
       }
     );
@@ -336,9 +327,6 @@ async function getLangchainResponse(chatId, userInput) {
           .join("\n");
       }
 
-      // Als de LLM alleen een tool call doet en geen tekstuele content stuurt,
-      // dan is botResponseText hier leeg. textMessageHandler zal dan niets sturen.
-      // De status update komt van de TelegramStatusUpdateHandler.
       if (
         botResponseText.trim() === "" &&
         lastAiMessage.tool_calls &&
@@ -347,7 +335,7 @@ async function getLangchainResponse(chatId, userInput) {
         console.log(
           `[LangGraph - Chat ${chatId}] LLM gaf geen tekstuele content, alleen tool_calls. Statusupdates via handler.`
         );
-        return ""; // Retourneer lege string, textMessageHandler zal dit afhandelen.
+        return "";
       }
 
       return botResponseText;
@@ -362,7 +350,7 @@ async function getLangchainResponse(chatId, userInput) {
     console.error(
       `[LangGraph - Chat ${chatId}] Fout in getLangchainResponse: ${error.message}`,
       error.stack,
-      error.cause // Log de oorzaak als die er is
+      error.cause
     );
     let userMessage = "Sorry, er ging iets mis bij het verwerken van uw vraag via de AI.";
     if (error.message) {
@@ -380,8 +368,6 @@ async function getLangchainResponse(chatId, userInput) {
           "Het spijt me, er is momenteel een technisch probleem met de verbinding naar de AI (limiet bereikt). Probeer het later opnieuw.";
       }
     }
-    // De callback handler kan een error message sturen voor tool errors.
-    // Dit is voor algemene LangGraph errors.
     return userMessage;
   }
 }

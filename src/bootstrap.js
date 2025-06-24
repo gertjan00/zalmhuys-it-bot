@@ -4,7 +4,7 @@ process.emit = function (name, data, ...args) {
     name === "warning" &&
     typeof data === "object" &&
     data.name === "DeprecationWarning" &&
-    data.code === "DEP0040" // Specifieke code voor punycode
+    data.code === "DEP0040"
   ) {
     return false;
   }
